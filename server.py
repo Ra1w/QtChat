@@ -1,27 +1,55 @@
-import socket, time
+import socket
 import threading
 
+HOST = "localhost"
+PORT = 8000
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(("localhost", 8000))
-server.listen(2)
+server.bind((HOST, PORT))
+server.listen()
 
-client_1, addres_1 = server.accept()
-client_2, addres_2 = server.accept()
+CLIENTS = []
+NICKNAMES = []
 
-def send1():
+def broadcast(message):
+    for client in CLIENTS:
+        try:
+            client.sendall(message)
+        except:
+            continue
+
+def handle(client):
     while True:
-        data_1 = client_1.recv(2048)
-        client_2.sendall(data_1)
+        try:
+            message = client.recv(1024)
+            for cl in CLIENTS:
+                if cl != client:
+                    cl.sendall(message)
+            print(NICKNAMES)
+        except:
+            index = CLIENTS.index(client)
+            nickname = NICKNAMES[index]
+            CLIENTS.remove(client)
+            client.close()
+            broadcast(f"Server: {nickname} покинул сервер!".encode('utf-8'))
+            NICKNAMES.remove(nickname)
+            break
 
-def send2():
+def receive():
     while True:
-        data_2 = client_2.recv(2048)
-        client_1.sendall(data_2)
+        try:
+            client, address = server.accept()
 
+            client.sendall('Server: NICK_REQUEST'.encode('utf-8'))
+            nickname = client.recv(1024).decode('utf-8')
+            NICKNAMES.append(nickname)
+            CLIENTS.append(client)
 
-threading.Thread(target=send1).start()
-threading.Thread(target=send2).start()
+            client.sendall("Подключение к серверу!".encode('utf-8'))
+            broadcast(f"Server: {nickname} подключился к серверу!".encode('utf-8'))
 
-while True:
-    time.sleep(1)
+            threading.Thread(target=handle, args=(client, )).start()
+        except Exception as exp:
+            print(f"Error log: {str(exp)}")
 
+receive()
